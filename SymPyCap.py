@@ -476,6 +476,9 @@ class Circuit(object):
         self.variables = self.node_potentials[1:self.number_of_nodes]
         self.variables.extend(self.current_variables)
 
+        print(self.equations)
+        print(self.variables)
+
         #------------- Returning solution -------------------------------------
         if omega == "":        
             #------------- System is linear, use linsolve ---------------------
@@ -489,6 +492,7 @@ class Circuit(object):
                 self.solutions = dict(zip(self.variables, next(iter(solutions)))) 
                 
         else:
+
             #------------- System is complex, use most general solver ---------
             solutions = sympy.solve(self.equations, self.variables)            
 

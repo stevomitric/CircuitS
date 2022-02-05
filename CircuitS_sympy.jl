@@ -1,4 +1,4 @@
-using Symbolics
+using SymPy
 
 @enum ELEM_TYPE Resistor=1 Inductor Capacitor Voltage Current Impedance Admitance OpAmp ABCDElem VCVS VCCS CCVS CCCS IdealT InductiveT TransmissionLine
 
@@ -7,7 +7,6 @@ mutable struct Circuit
     num_nodes::Int
 
     eq_current::Array{Any}
-    eq_current_mult::Array{Any}
     eq_potential::Array{Any}
     var_voltage::Array{Any}
     var_current::Array{Any}
@@ -19,7 +18,7 @@ end
 
 function create_circuit()
     """Creates and returns a default circuit object"""
-    circuit::Circuit = Circuit([], 0, [], [], [], [], [], Dict(), 0, false)
+    circuit::Circuit = Circuit([], 0, [], [], [], [], Dict(), 0, false)
     return circuit
 end
 
@@ -46,42 +45,37 @@ function init_circuit(circuit::Circuit)
 
     # Set base equation for KZS and node potential
     circuit.eq_current = [0 for item in 1:circuit.num_nodes]
-    circuit.eq_current_mult = [1 for item in 1:circuit.num_nodes]
-    circuit.eq_potential = [Symbolics.variables("V"*string(item) )[1] for item in 0:circuit.num_nodes-1]
+    circuit.eq_potential = [symbols("V"*string(item) ) for item in 0:circuit.num_nodes-1]
     circuit.eq_potential[1] = 0
 
     # Create element symbols
     for elem in circuit.elements
-        circuit.var_element[elem[2]] = Symbolics.variables(elem[2])[1]
+        circuit.var_element[elem[2]] = symbols(elem[2])
     end
     
     # init s
-    circuit.sym_s = Symbolics.variables("s")[1]
+    circuit.sym_s = symbols("s")
 
     # calculate equations from elements
     for elem in circuit.elements
         elemType::ELEM_TYPE = elem[1]
 
         if (elemType == Resistor || elemType == Impedance)
-            circuit.eq_current_mult[ elem[3] + 1 ] *= circuit.var_element[elem[2]]
-            circuit.eq_current_mult[ elem[4] + 1 ] *= circuit.var_element[elem[2]]
             circuit.eq_current[ elem[3] + 1 ] += (circuit.eq_potential[elem[3]+1] - circuit.eq_potential[elem[4]+1]) / circuit.var_element[elem[2]]
             circuit.eq_current[ elem[4] + 1 ] += (circuit.eq_potential[elem[4]+1] - circuit.eq_potential[elem[3]+1]) / circuit.var_element[elem[2]]
         elseif (elemType == Admitance)
             circuit.eq_current[ elem[3] + 1 ] += (circuit.eq_potential[elem[3]+1] - circuit.eq_potential[elem[4]+1]) * circuit.var_element[elem[2]]
             circuit.eq_current[ elem[4] + 1 ] += (circuit.eq_potential[elem[4]+1] - circuit.eq_potential[elem[3]+1]) * circuit.var_element[elem[2]]
         elseif (elemType == Inductor)
-            I0 = if (length(elem) == 5 && !circuit.time) Symbolics.variables(elem[5])[1] else 0 end
-            circuit.eq_current_mult[ elem[3] + 1 ] *= (circuit.sym_s * circuit.var_element[elem[2]])
-            circuit.eq_current_mult[ elem[4] + 1 ] *= (circuit.sym_s * circuit.var_element[elem[2]])
+            I0 = if (length(elem) == 5 && !circuit.time) symbols(elem[5]) else 0 end
             circuit.eq_current[ elem[3] + 1 ] += (circuit.eq_potential[elem[3]+1] - circuit.eq_potential[elem[4]+1]) / (circuit.sym_s * circuit.var_element[elem[2]]) + (I0/circuit.sym_s)
             circuit.eq_current[ elem[4] + 1 ] += (circuit.eq_potential[elem[4]+1] - circuit.eq_potential[elem[3]+1]) / (circuit.sym_s * circuit.var_element[elem[2]]) - (I0/circuit.sym_s)
         elseif (elemType == Capacitor)
-            U0 = if (length(elem) == 5 && !circuit.time) Symbolics.variables(elem[5])[1] else 0 end
+            U0 = if (length(elem) == 5 && !circuit.time) symbols(elem[5]) else 0 end
             circuit.eq_current[ elem[3] + 1 ] += (circuit.eq_potential[elem[3]+1] - circuit.eq_potential[elem[4]+1]) * circuit.sym_s * circuit.var_element[elem[2]] - U0*circuit.var_element[elem[2]]
             circuit.eq_current[ elem[4] + 1 ] += (circuit.eq_potential[elem[4]+1] - circuit.eq_potential[elem[3]+1]) * circuit.sym_s * circuit.var_element[elem[2]] + U0*circuit.var_element[elem[2]]
         elseif (elemType == Voltage)
-            branch_current = Symbolics.variables("I_"*elem[2])[1]
+            branch_current = symbols("I_"*elem[2])
             push!(circuit.var_current, branch_current)
             push!(circuit.var_voltage, circuit.eq_potential[elem[3]+1] - circuit.eq_potential[elem[4]+1] - circuit.var_element[elem[2]])
             circuit.eq_current[elem[3]+1] += branch_current
@@ -90,14 +84,14 @@ function init_circuit(circuit::Circuit)
             circuit.eq_current[elem[3]+1] += circuit.var_element[elem[2]]
             circuit.eq_current[elem[4]+1] -= circuit.var_element[elem[2]]
         elseif (elemType == OpAmp)
-            branch_current = Symbolics.variables("I_"*elem[2])[1]
+            branch_current = symbols("I_"*elem[2])
             push!(circuit.var_current, branch_current)
             push!(circuit.var_voltage, (circuit.eq_potential[elem[3][1]+1] - circuit.eq_potential[elem[3][2]+1]) )
             circuit.eq_current[elem[4]+1] += branch_current
         elseif (elemType == ABCDElem)
-            a11, a12, a21, a22 = Symbolics.variables(elem[5][1])[1], Symbolics.variables(elem[5][2])[1], Symbolics.variables(elem[5][3])[1], Symbolics.variables(elem[5][4])[1]
+            a11, a12, a21, a22 = symbols(elem[5][1]), symbols(elem[5][2]), symbols(elem[5][3]), symbols(elem[5][4])
             
-            I_A, I_B = Symbolics.variables("I_"*elem[2]*"_"*string(elem[3][1]))[1], Symbolics.variables("I_"*elem[2]*"_"*string(elem[4][1]))[1]
+            I_A, I_B = symbols("I_"*elem[2]*"_"*string(elem[3][1])), symbols("I_"*elem[2]*"_"*string(elem[4][1]))
 
             circuit.eq_current[elem[3][1]+1] += I_A
             circuit.eq_current[elem[3][2]+1] -= I_A
@@ -110,19 +104,19 @@ function init_circuit(circuit::Circuit)
             push!(circuit.var_current, I_A)
             push!(circuit.var_current, I_B)
         elseif (elemType == VCVS)
-            amp = Symbolics.variables(elem[5])[1]
-            I = Symbolics.variables("I_"*elem[2])[1]
+            amp = symbols(elem[5])
+            I = symbols("I_"*elem[2])
             circuit.eq_current[elem[4][1]+1] += I
             circuit.eq_current[elem[4][2]+1] -= I
             push!(circuit.var_voltage, circuit.eq_potential[elem[4][1]+1] - circuit.eq_potential[elem[4][2]+1] - amp* (circuit.eq_potential[elem[3][1]+1] - elem[3][2]+1) )
             push!(circuit.var_current, I)
         elseif (elemType == VCCS)
-            trans = Symbolics.variables(elem[5])[1]
+            trans = symbols(elem[5])
             circuit.eq_current[elem[4][1]+1] += trans*(circuit.eq_potential[elem[3][1]+1] - circuit.eq_potential[elem[3][2]+1])
             circuit.eq_current[elem[4][2]+1] -= trans*(circuit.eq_potential[elem[3][1]+1] - circuit.eq_potential[elem[3][2]+1])
         elseif (elemType == CCCS)
-            amp = Symbolics.variables(elem[5])[1]
-            I = Symbolics.variables("I_"*elem[2])[1]
+            amp = symbols(elem[5])
+            I = symbols("I_"*elem[2])
             circuit.eq_current[elem[3][1]+1] += I
             circuit.eq_current[elem[3][2]+1] -= I
             circuit.eq_current[elem[4][1]+1] += amp*I
@@ -130,10 +124,8 @@ function init_circuit(circuit::Circuit)
             push!(circuit.var_voltage, circuit.eq_potential[elem[3][1]+1] - circuit.eq_potential[elem[3][2]+1])
             push!(circuit.var_current, I)
         elseif (elemType == CCVS)
-            trans = Symbolics.variables(elem[5])[1]
-            I = Symbolics.variables("I_"*elem[2])[1]
-            circuit.eq_current_mult[elem[3][1]+1] *= trans
-            circuit.eq_current_mult[elem[3][2]+1] *= trans
+            trans = symbols(elem[5])
+            I = symbols("I_"*elem[2])
             circuit.eq_current[elem[3][1]+1] += (circuit.eq_potential[elem[4][1]+1] - circuit.eq_potential[elem[4][2]+1])/trans
             circuit.eq_current[elem[3][2]+1] -= (circuit.eq_potential[elem[4][1]+1] - circuit.eq_potential[elem[4][2]+1])/trans
             circuit.eq_current[elem[4][1]+1] += I
@@ -141,8 +133,8 @@ function init_circuit(circuit::Circuit)
             push!(circuit.var_voltage, circuit.eq_potential[elem[3][1]+1] - circuit.eq_potential[elem[3][2]+1])
             push!(circuit.var_current, I)
         elseif (elemType == IdealT)
-            I = Symbolics.variables("I_"*elem[2])[1]
-            m = Symbolics.variables(elem[5])[1]
+            I = symbols("I_"*elem[2])
+            m = symbols(elem[5])
             
             #TODO: struja transformatora ide u pogresnim smerovima? (2 linije ispod)
             circuit.eq_current[elem[3][1]+1] += I
@@ -154,23 +146,23 @@ function init_circuit(circuit::Circuit)
             push!(circuit.var_voltage, eq)
             push!(circuit.var_current, I)
         elseif (elemType == InductiveT)
-            L1 = Symbolics.variables(elem[5][1])[1]
-            L2 = Symbolics.variables(elem[5][2])[1]
-            L12 = Symbolics.variables(elem[5][3])[1]
+            L1 = symbols(elem[5][1])
+            L2 = symbols(elem[5][2])
+            L12 = symbols(elem[5][3]) 
             I01 = 0
             I02 = 0
 
             if length(elem) == 6 && !circuit.time
                 if elem[6][1] != 0
-                    I01 = Symbolics.variables(elem[6][1])[1]
+                    I01 = symbols(elem[6][1])
                 end
                 if elem[6][2] != 0
-                    I02 = Symbolics.variables(elem[6][2])[1]
+                    I02 = symbols(elem[6][2])
                 end
             end
             
-            IK_A = Symbolics.variables("I_" * elem[2] * "_" * string(elem[3][1]))[1]
-            IK_B = Symbolics.variables("I_" * elem[2] * "_" * string(elem[4][1]))[1]
+            IK_A = symbols("I_" * elem[2] * "_" * string(elem[3][1]))
+            IK_B = symbols("I_" * elem[2] * "_" * string(elem[4][1]))
     
             circuit.eq_current[elem[3][1]+1] += IK_A
             circuit.eq_current[elem[3][2]+1] -= IK_A
@@ -186,11 +178,11 @@ function init_circuit(circuit::Circuit)
             push!(circuit.var_current, IK_B)
         elseif (elemType == TransmissionLine)
             #TODO: Zasto Zc i tau NE treba da budu simboli?
-            Zc = Symbolics.variables(elem[5][1])[1] #elem[5][1] 
-            tau = Symbolics.variables(elem[5][2])[1] #elem[5][2]
+            Zc = symbols(elem[5][1]) #elem[5][1] 
+            tau = symbols(elem[5][2]) #elem[5][2]
             
-            IA_A = Symbolics.variables("I_" * elem[2] * "_" * string(elem[3][1]))[1]
-            IA_B = Symbolics.variables("I_" * elem[2] * "_" * string(elem[4][1]))[1]
+            IA_A = symbols("I_" * elem[2] * "_" * string(elem[3][1]))
+            IA_B = symbols("I_" * elem[2] * "_" * string(elem[4][1]))
             
             if (!circuit.time)
                 circuit.eq_current[elem[3][1]+1] += IA_A
@@ -222,32 +214,13 @@ end
 function simulate(circuit::Circuit)
     """Simulates the circuit by calculating all potentials and currents"""
 
-    for i in 1:length(circuit.eq_current)
-        circuit.eq_current[i] *= circuit.eq_current_mult[i]
-        circuit.eq_current[i] = simplify(circuit.eq_current[i])
-    end
-
     # equations to solve
-    equations::Array{Num} = circuit.eq_current[2:length(circuit.eq_current)]
+    equations::Array{Sym} = circuit.eq_current[2:length(circuit.eq_current)]
     equations = vcat(equations, circuit.var_voltage)
-    tmp = [];
-    for i in 1:length(equations)
-        if (string(equations[i]) != "0")
-            push!(tmp, equations[i])
-        end
-    end
-    equations = tmp
 
     # variables to solve for
-    variables::Array{Num} = circuit.eq_potential[2:length(circuit.eq_potential)]
+    variables::Array{Sym} = circuit.eq_potential[2:length(circuit.eq_potential)]
     variables = vcat(variables, circuit.var_current)
-    tmp = []
-    for i in 1:length(variables)
-        if ( occursin(string(variables[i]), string(equations)))
-            push!(tmp, variables[i])
-        end
-    end
-    variables = tmp
 
     println(equations)
     println(variables)
@@ -257,10 +230,7 @@ function simulate(circuit::Circuit)
     #println(typeof(equations))
     #println(typeof(variables))
 
-    #result = Symbolics.solve_for(equations, variables)
-    #println("resenje: ")
-    #println(result)
-    result = Symbolics.solve_for(equations, variables, simplify=true)
+    result::Dict = solve(equations, variables)
 
     return result
 end
