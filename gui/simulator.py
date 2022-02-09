@@ -1,7 +1,6 @@
 from multiprocessing import Process, Queue
 import time
 
-from sympy import EX
 
 class Simulate:
     def __init__(self, callback):
