@@ -12,25 +12,73 @@ mutable struct Circuit
     var_voltage::Array{Any}
     var_current::Array{Any}
     var_element::Dict
+    replacements::Dict
 
     sym_s::Any
     time::Bool
+    omega::String
 end
 
+@doc """
+    circuit = create_circuit()
+
+Creates and returns an empty circuit object.
+""" ->
 function create_circuit()
     """Creates and returns a default circuit object"""
-    circuit::Circuit = Circuit([], 0, [], [], [], [], [], Dict(), 0, false)
+    circuit::Circuit = Circuit([], 0, [], [], [], [], [], Dict(), Dict(), 0, false, "")
     return circuit
 end
 
+@doc """
+    add_element(elem::Vector, circuit::Circuit)
+
+Adds an element to the circuit. 
+
+# Arguments
+- `elem::Vector`: Element to be added. Elements are given in specific formats:
+  - [type, id, a, b]
+  - [type, id, a, b, IC]
+  - [type, id, [a1,a2], b]
+  - [type, id, [a1,a2], [b1,b2]]
+  - [type, id, [a1,a2], [b1,b2], IC]
+  Details of each element are found at the docs.
+- `circuit::Circuit`: the circuit object in which the element will be added to
+
+# Examples
+```julia-repl
+add_element([Resistor, "R1", 1, 0], circuit)
+add_element([Voltage, "V1", 1, 0], circuit)
+```
+""" ->
 function add_element(elem, circuit::Circuit)
     """Adds 'elem' defined in format [TYPE, parms ...] to the circuit"""
     push!(circuit.elements, elem)
 end
 
-function init_circuit(circuit::Circuit)
+@doc """
+    init_circuit(elem::Vector, circuit::Circuit)
+
+Prepares the circuit for simulation. Circuit has to be initialized before the simulation every time a new element is added.
+
+# Arguments
+- `circuit::Circuit`: A circuit to be initialized
+- `replacements::Dict`: Dictionary of replacements in the circuit given in format: Dict([ R1 => R, R2 => R, ...]);
+  - `R1`, `R2` and `R` are symbols
+
+# Examples
+```julia-repl
+@variables R1, R2, R
+init_circuit(circuit, Dict([ R1 => R, R2 => R]);
+```
+""" ->
+function init_circuit(circuit::Circuit, replacements::Dict = Dict(), omega::String="")
     """Prepares the circuit for simulation"""
+
+    # set replacements for simulate function
+    circuit.replacements = replacements
     
+
     # calculate number of nodes
     circuit.num_nodes = 0
     for elem in circuit.elements
@@ -50,12 +98,19 @@ function init_circuit(circuit::Circuit)
     circuit.eq_potential = [Symbolics.variables("V"*string(item) )[1] for item in 0:circuit.num_nodes-1]
     circuit.eq_potential[1] = 0
 
+    circuit.var_voltage = []
+    circuit.var_current = []
+
     # Create element symbols
     for elem in circuit.elements
         circuit.var_element[elem[2]] = Symbolics.variables(elem[2])[1]
     end
     
-    # init s
+    # check for time domain
+    if (omega != "")
+        circuit.time = true
+    end
+    circuit.omega = omega
     circuit.sym_s = Symbolics.variables("s")[1]
 
     # calculate equations from elements
@@ -219,14 +274,86 @@ function init_circuit(circuit::Circuit)
 
 end
 
-function simulate(circuit::Circuit)
+@doc """
+    get_equations(circuit::Circuit)
+
+Returns a list of MNA equations with applied replacements.
+
+# Arguments
+- `circuit::Circuit`: Initialized circuit
+
+# Returns
+`result::Vector`: A list of all equations
+
+# Examples
+```julia-repl
+result = get_equations(circuit);
+```
+""" ->
+function get_equations(circuit::Circuit)
+    equations::Array{Num} = circuit.eq_current[2:length(circuit.eq_current)]
+    equations = vcat(equations, circuit.var_voltage)
+    for i in 1:length(equations)
+        if (circuit.omega != "")
+            omega = Symbolics.variables(circuit.omega)[1]
+            equations[i] = substitute(equations[i], Dict([circuit.sym_s=>im*omega]))
+        end
+        equations[i] = substitute(equations[i], circuit.replacements)
+    end
+    return equations
+end
+
+@doc """
+    get_variables(circuit::Circuit)
+
+Returns a list of MNA variables - symbols for node potentials and some currents.
+
+# Arguments
+- `circuit::Circuit`: Initialized circuit
+
+# Returns
+`result::Vector`: A list of all variables
+
+# Examples
+```julia-repl
+result = get_variables(circuit);
+```
+""" ->
+function get_variables(circuit::Circuit)
+    variables::Array{Num} = circuit.eq_potential[2:length(circuit.eq_potential)]
+    variables = vcat(variables, circuit.var_current)
+    return variables
+end
+
+@doc """
+    simulate(circuit::Circuit, simpl::Bool = true)
+
+Simulates the circuit by calculating node potentials and some currents (MNA).
+
+# Arguments
+- `circuit::Circuit`: A circuit to be simulated
+- `simpl::Bool = true`: Flag indicating whether to simplify resulting equations
+
+# Returns
+`result::Dict`: A dictionary of all calculated potentials and currents
+
+# Examples
+```julia-repl
+result = simulate(circuit);
+```
+""" ->
+function simulate(circuit::Circuit, simpl::Bool = true)
     """Simulates the circuit by calculating all potentials and currents"""
 
     for i in 1:length(circuit.eq_current)
         circuit.eq_current[i] *= circuit.eq_current_mult[i]
-        circuit.eq_current[i] = simplify(circuit.eq_current[i])
+        circuit.eq_current[i] = simplify(circuit.eq_current[i], expand=true)
+        circuit.eq_current[i] = substitute(circuit.eq_current[i], circuit.replacements)
     end
-
+    for i in 1:length(circuit.var_voltage)
+        circuit.var_voltage[i] = substitute(circuit.var_voltage[i], circuit.replacements)
+        #circuit.var_voltage[i] = simplify(circuit.var_voltage[i], expand=true)
+    end
     # equations to solve
     equations::Array{Num} = circuit.eq_current[2:length(circuit.eq_current)]
     equations = vcat(equations, circuit.var_voltage)
@@ -241,36 +368,21 @@ function simulate(circuit::Circuit)
     # variables to solve for
     variables::Array{Num} = circuit.eq_potential[2:length(circuit.eq_potential)]
     variables = vcat(variables, circuit.var_current)
-    tmp = []
-    for i in 1:length(variables)
-        if ( occursin(string(variables[i]), string(equations)))
-            push!(tmp, variables[i])
-        end
-    end
-    variables = tmp
+    variables = [ variables[i] for i in 1:length(variables) if ( occursin(string(variables[i]), string(equations))) ]
 
     println(equations)
     println(variables)
 
-    #println(equations)
-    #println(variables)
-    #println(typeof(equations))
-    #println(typeof(variables))
+    result = Symbolics.solve_for(equations, variables, simplify=simpl)
+    result_map = Dict();
+    for i in 1:length(variables)
+        if (circuit.omega != "")
+            omega = Symbolics.variables(circuit.omega)[1]
+            result[i] = substitute(result[i], Dict([circuit.sym_s=>im*omega]))
+            result[i] = substitute(result[i], circuit.replacements)
+        end
+        result_map[string(variables[i])] = result[i]
+    end
 
-    #result = Symbolics.solve_for(equations, variables)
-    #println("resenje: ")
-    #println(result)
-    result = Symbolics.solve_for(equations, variables, simplify=true)
-
-    return result
+    return result_map
 end
-
-
-# Test
-# circuit = create_circuit()
-# add_element([Resistor, "R1", 0, 1], circuit)
-# add_element([Current, "Ig", 0, 1], circuit)
-# init_circuit(circuit)
-# result = simulate(circuit)
-
-# print(result)
