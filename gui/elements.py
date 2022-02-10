@@ -51,11 +51,13 @@ class Element:
         t1p1, t2p1 = (pos[0], pos[1]+30), (pos[0], pos[1]-30)
         t1p2, t2p2 = (pos[0]+30, pos[1]), (pos[0]-30, pos[1])
         if (self.angle == 0 or self.angle == 180):
-            if (self.type == "V" or self.type == "I"): return [t1p1, t2p1] if (self.angle == 180) else [t2p1, t1p1]
+            if (self.type == "V"): return [t1p1, t2p1] if (self.angle == 180) else [t2p1, t1p1]
+            elif (self.type == "I"): return [t1p1, t2p1] if (self.angle == 0) else [t2p1, t1p1]
             elif (self.type == "G"): return [t2p1] if self.angle==0 else [t1p1]
             else: return [t1p2, t2p2]
         else:
-            if (self.type == "V" or self.type == "I"): return [t1p2, t2p2] if (self.angle == 270) else [t2p2, t1p2]
+            if (self.type == "V"): return [t1p2, t2p2] if (self.angle == 270) else [t2p2, t1p2]
+            elif (self.type == "I"): return [t1p2, t2p2] if (self.angle == 90) else [t2p2, t1p2]
             elif (self.type == "G"): return [t2p2] if self.angle==0 else [t1p2]
             else: return [t1p1, t2p1]
 
@@ -357,6 +359,7 @@ class Elements:
         for elem in self.elements:
             if (elem.type in "R L C Z Y I V"):
                 t = elem.getTerminals()
+                print(t)
                 n1 = self.__check_connected(connected_new, t[0])
                 elem.node1 = str(n1)
                 n2 = self.__check_connected(connected_new, t[1])

@@ -42,8 +42,8 @@ Adds an element to the circuit.
   - [type, id, [a1,a2], b]
   - [type, id, [a1,a2], [b1,b2]]
   - [type, id, [a1,a2], [b1,b2], IC]
-  Details of each element are found at the docs.
-- `circuit::Circuit`: the circuit object in which the element will be added to
+  Details of each element are found in the docs.
+- `circuit::Circuit`: the circuit object to which the element will be added to
 
 # Examples
 ```julia-repl
@@ -57,14 +57,18 @@ function add_element(elem, circuit::Circuit)
 end
 
 @doc """
-    init_circuit(elem::Vector, circuit::Circuit)
+    init_circuit(circuit::Circuit, replacements::Dict, omega::String="")
 
-Prepares the circuit for simulation. Circuit has to be initialized before the simulation every time a new element is added.
+Prepares the circuit for simulation. Circuits have to be initialized before the simulation every time a new element is added.
 
 # Arguments
 - `circuit::Circuit`: A circuit to be initialized
-- `replacements::Dict`: Dictionary of replacements in the circuit given in format: Dict([ R1 => R, R2 => R, ...]);
+- `replacements::Dict`: Dictionary of replacements in the circuit, given in format: `Dict([ R1 => R, R2 => R, ...])`
   - `R1`, `R2` and `R` are symbols
+- `omega::String`: A replacement for `s=j*omega`
+
+!!! note "Note"
+    If given, `omega` has to be a single symbol, given as a string. It can be replaced by a complex term in `replacements::Dict`.
 
 # Examples
 ```julia-repl
@@ -332,7 +336,7 @@ Simulates the circuit by calculating node potentials and some currents (MNA).
 
 # Arguments
 - `circuit::Circuit`: A circuit to be simulated
-- `simpl::Bool = true`: Flag indicating whether to simplify resulting equations
+- `simpl::Bool = true`: Flag indicating whether to simplify the resulting equations
 
 # Returns
 `result::Dict`: A dictionary of all calculated potentials and currents
@@ -370,8 +374,8 @@ function simulate(circuit::Circuit, simpl::Bool = true)
     variables = vcat(variables, circuit.var_current)
     variables = [ variables[i] for i in 1:length(variables) if ( occursin(string(variables[i]), string(equations))) ]
 
-    println(equations)
-    println(variables)
+    #println(equations)
+    #println(variables)
 
     result = Symbolics.solve_for(equations, variables, simplify=simpl)
     result_map = Dict();
