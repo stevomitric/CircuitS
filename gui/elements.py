@@ -4,6 +4,7 @@ from tkinter.ttk import *
 import tkinter as tk
 from PIL import Image
 from PIL import ImageTk
+from sympy import true
 from utils import *
 import json
 
@@ -61,9 +62,10 @@ class Element:
             elif (self.type == "G"): return [t2p2] if self.angle==0 else [t1p2]
             else: return [t1p1, t2p1]
 
-    def changeLabel(self, new):
+    def changeLabel(self, new, tp=None):
         self.label = new
         self.canv.itemconfig(self.lab, text=new)
+        if (tp): tp.destroy()
 
     def openConfig(self):
         tp = Toplevel()
@@ -74,7 +76,7 @@ class Element:
         tp.e1.insert(0, str(self.label))
         tp.e1.pack(side='top', padx=5, pady=5, fill='x' )
         Label(tp, text=f"Node1: {self.node1}   Node2: {self.node2}").pack(side='top', pady=5)
-        tp.b1 = Button(tp, text='Save', command= lambda:self.changeLabel( tp.e1.get() ) )
+        tp.b1 = Button(tp, text='Save', command= lambda:self.changeLabel( tp.e1.get(), tp ) )
         tp.b1.pack(side='top', pady=5)
 
 class LineElement:
@@ -302,6 +304,12 @@ class Elements:
                     return id
         return False
 
+    def hasGround(self):
+        for elem in self.elements:
+            if (elem.type == "G"):
+                return True
+        return False
+
     def juliaCircuit(self):
         data = 'circuit = create_circuit()\n'
 
@@ -359,7 +367,7 @@ class Elements:
         for elem in self.elements:
             if (elem.type in "R L C Z Y I V"):
                 t = elem.getTerminals()
-                print(t)
+                #print(t)
                 n1 = self.__check_connected(connected_new, t[0])
                 elem.node1 = str(n1)
                 n2 = self.__check_connected(connected_new, t[1])

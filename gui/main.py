@@ -3,6 +3,7 @@ from tkinter.ttk import *
 from tkinter.filedialog import askopenfilename, asksaveasfilename
 from tkinter.messagebox import showwarning, askyesno
 import tkinter as tk
+import os
 
 from utils import loadImage
 from elements import Elements
@@ -17,11 +18,18 @@ class Main:
         self.root.geometry("700x500")
         self.root.title("CircuitS GUI")
 
+        try:
+            dir_path = os.path.dirname(os.path.realpath(__file__))
+            os.chdir(dir_path)
+            os.chdir("..")
+        except: pass
+
         menubar = Menu(self.root)
         filemenu = Menu(menubar, tearoff=0)
         filemenu.add_command(label="New", command=self.createNew)
         filemenu.add_command(label="Open", command=self.importElements)
         filemenu.add_command(label="Save as...",command=self.exportElements)
+        filemenu.add_command(label="Export .jl file...",command=self.exportElementsJl)
         filemenu.add_separator()
         filemenu.add_command(label="Exit", command=self.root.quit)
         menubar.add_cascade(label="File", menu=filemenu)
@@ -41,8 +49,7 @@ class Main:
         menubar.add_cascade(label="Simulate", menu=simulatemenu)
 
         helpmenu = Menu(menubar, tearoff=0)
-        helpmenu.add_command(label="Documentation")
-        helpmenu.add_command(label="About...")
+        helpmenu.add_command(label="About...", command=self.showHelp)
         menubar.add_cascade(label="Help", menu=helpmenu)
 
         f1 = tk.Frame(self.root, bg='ghostwhite')
@@ -51,7 +58,7 @@ class Main:
         Button(f1, image=loadImage('gui/icons/save.png'), command=self.exportElements).pack(side='left')
         Button(f1, image=loadImage('gui/icons/load.png'), command=self.importElements).pack(side='left', padx=(0,20))
         Button(f1, image=loadImage('gui/icons/run.png'), command=self.simulate).pack(side='left')
-        Button(f1, image=loadImage('gui/icons/help.png')).pack(side='left', padx=(0,20))
+        Button(f1, image=loadImage('gui/icons/help.png'), command=self.showHelp).pack(side='left', padx=(0,20))
         Button(f1, image=loadImage('gui/icons/pen.png'), command=self.drawLine).pack(side='left')
         Button(f1, image=loadImage('gui/icons/erase.png'),  command=self.erase).pack(side='left', padx=(0,20))
         Button(f1, image=loadImage('gui/icons/resistor.png'), command= lambda : self.addElement("R") ).pack(side='left')
@@ -97,6 +104,11 @@ class Main:
 
         self.root.mainloop()
 
+    def showHelp(self):
+        tp = Toplevel(self.root)
+        Label(tp, text="CircuitS GUI simulator").pack(pady=10, padx=10)
+        Label(tp, text="Docs: http://stevomitric.github.io/CircuitS").pack(pady=10, padx=10)
+
     def createNew(self):
         if (self.elements.elements == []):
             return
@@ -107,6 +119,20 @@ class Main:
         for elem in self.elements.elements:
             elem.erase()
         self.elements.elements == []
+
+    def exportElementsJl(self):
+        if (not self.elements.hasGround()):
+            r = askyesno("No ground!", "It appears your circuit doesn't have a ground. Are you sure you want to continue?")
+            if not r:
+                return
+
+        fl = asksaveasfilename(defaultextension=".jl", filetypes=(("Julia files", "*.jl"),("All Files", "*.*")) )
+        if not fl: return
+        data = self.elements.juliaCircuit()
+        data = 'include("CircuitS.jl")\n\n'+data+"\n\ninit_circuit(circuit)\nresult = simulate(circuit)\nprintln(result)"
+        f = open(fl, "w")
+        f.write(data)
+        f.close()
 
     def exportElements(self):
         fl = asksaveasfilename(defaultextension=".circS", filetypes=(("CircuitS files", "*.circS"),("All Files", "*.*")) )
@@ -128,12 +154,16 @@ class Main:
             self.elements.juliaCircuit()
 
     def erase(self):
+        state = self.elements.STATE
         self.elements.clearState()
-        self.elements.erase()
+        if (state != "erase"):
+            self.elements.erase()
 
     def drawLine(self):
+        state = self.elements.STATE
         self.elements.clearState()
-        self.elements.drawLine()
+        if (state != "drawLine"):
+            self.elements.drawLine()
 
     def addElement(self, elem):
         self.elements.clearState()
@@ -155,6 +185,10 @@ class Main:
         self.elements.MMotion(event)
 
     def simulate(self):
+        if (not self.elements.hasGround()):
+            showwarning("No ground!", "It appears your circuit doesn't have a ground. Please add it before starting simulations")
+            return
+
         tp = Toplevel(self.root)
         x = tp.master.winfo_x()+tp.master.winfo_width()//2-300//2
         y = tp.master.winfo_y()+tp.master.winfo_height()//2-120//2
