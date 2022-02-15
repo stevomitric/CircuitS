@@ -56,6 +56,16 @@ function add_element(elem, circuit::Circuit)
     push!(circuit.elements, elem)
 end
 
+
+@doc """
+    remove_element(elem::String, circuit::Circuit)
+
+Removes an element with given id `elem` from the circuit.
+""" ->
+function remove_element(elem::String, circuit::Circuit)
+    circuit.elements = [ circuit.elements[i] for i in 1:length(circuit.elements) if circuit.elements[i][2] != elem ]
+end
+
 @doc """
     init_circuit(circuit::Circuit, replacements::Dict, omega::String="")
 
