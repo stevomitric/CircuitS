@@ -25,6 +25,10 @@ CircuitS features a detailed documentation and has a rich example base that can 
 There are also video demonstrations (voiced in Serbian language, with english captions):
 - [Introduction and installation](https://www.youtube.com/watch?v=_FDBpXHv5K4&ab_channel=FilipDrobnjakovi%C4%87)
 - [Current divider](https://www.youtube.com/watch?v=eYmp1-jlMks&t=201s&ab_channel=FilipDrobnjakovi%C4%87)
+- [Riordan Gyrator](https://www.youtube.com/watch?v=Efm3ih1JY_A)
+- [Subtractor](https://www.youtube.com/watch?v=WjltuN7bHWE)
+- [Thevenin Generator](https://www.youtube.com/watch?v=TpbO4-2LFw4)
+- [OTA Gyrator](https://www.youtube.com/watch?v=8_DsNqBDg-s)
 
 ## Authors
 
